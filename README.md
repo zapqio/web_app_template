@@ -1,224 +1,113 @@
-# Szablon aplikacji Web dla Zapqio
+# Potok i webhook — szablon PHP dla Zapq
 
-Gotowy punkt startowy dla repozytorium typu **Web** hostowanego przez Zapqio.
-Szablon: [zapqio/web_app_template](https://github.com/zapqio/web_app_template).
+Jedna strona: nazwa metody API, wejście JSON, przycisk **Uruchom** i wynik odebranego webhooka.
+PHP uruchamia potok jako zalogowany użytkownik. Zapq wysyła jego status do aplikacji,
+a odbiornik sprawdza podpis i zapisuje wynik w SQLite.
 
-Przykład pokazuje odczyt/zapis SQLite, pliku, formularz PHP z sesją Zapq i CSRF,
-wywołanie potoku przez API oraz statyczne HTML/JS bez Composera ani etapu budowania.
-Cały katalog stanowi samodzielne repozytorium typu **Web**; `public/` musi znajdować
-się w jego katalogu głównym. Platforma wdraża kod z commita do wspólnego hosta PHP.
-Nie tworzysz obrazu Docker dla każdej aplikacji. Szablon nie wymaga Composera ani npm.
-
-## Od kopii szablonu do działającej aplikacji
-
-1. Na GitHubie wybierz **Use this template → Create a new repository**.
-2. Sklonuj swoje nowe repo, uruchom testy opisane niżej, dostosuj kod i wypchnij commit.
-   Możesz też skopiować wszystkie pliki do repo na GitLabie; zachowaj pliki ukryte
-   oraz `public/` w katalogu głównym repozytorium.
-3. W Zapq wybierz **Repozytoria → Dodaj**, podaj URL swojego repo, gałąź i typ **Web**.
-   Token do prywatnego repo ustaw w platformie, poza plikami szablonu.
-4. W **Aplikacje → Dodaj** wybierz repo, nadaj nazwę i opcjonalny opis.
-   Nazwa i repozytorium zostają przypisane na stałe. Samo utworzenie nie wdraża kodu.
-5. Otwórz **Wdrożenia**, sprawdź repo i wdróż HEAD albo pełny SHA commita. Oczekuj
-   `Applied`. Adres to `https://app.zapq.io/{firma}/ui/{nazwa}/` (z końcowym `/`).
-6. Nadaj użytkownikowi Open do aplikacji. Otwórz ją z menu **Twoje aplikacje**, zapisz
-   notatkę i sprawdź `state.php`: `values`, `file`, `version` i `integrity: "ok"`.
-7. W Zapq przygotuj testowy potok z metodą wdrożoną na runnerze i przypisz do niego
-   niestandardową metodę API. Szablon wysyła JSON `{"source":"web-app"}`; potok musi
-   akceptować to wejście. Dla innego kontraktu zmień wejście w `public/run.php`.
-8. Wpisz nazwę metody API w formularzu albo ustaw ją jako domyślną w `lib/config.php`.
-   To jawna konfiguracja wskazująca potok, nie poświadczenie. Uruchom potok i kliknij
-   **Odśwież wynik**. Wynik JSON zawiera stan kroków, `lastOutput` i autora; linki
-   prowadzą do logów kroków. HTTP 200 przy uruchomieniu oznacza przyjęcie, nie sukces potoku.
-
-Używamy istniejącego `POST /api/exec-pipeline/{nazwa-metody}`. Powiązanie nazwy z ID
-potoku ustawia się w Zapq; nie ma potrzeby dodawania osobnego API do szablonu.
-Bez JavaScript formularz nadal uruchamia potok i zwraca JSON z `runId`; wynik odczytasz
-pod `status.php?runId=<runId>`. Nie ponawiaj automatycznie nieudanego POST: potok mógł
-już wystartować mimo utraty odpowiedzi. Szablon nie zapisuje historii wyników w SQLite.
-
-| Uprawnienie | Potrzebne do |
-|---|---|
-| `Repositories.Manage` / `Repositories.View` | Dodania repo / sprawdzenia i pobrania wersji. |
-| `Applications.Manage` | Utworzenia, opisu i usunięcia aplikacji. |
-| `Deployments.Send` na `application` | Wdrożenia, rollbacku i wycofania; obejmuje podgląd. |
-| `Applications.Open` na aplikacji | Otwierania PHP, statyk i pobierania kontekstu. |
-| `Pipelines.Run` na potoku | Uruchamiania przez API jako zalogowany użytkownik. |
-| `Logs.View` w zakresie potoku | Odczytu wyniku, stanu i logów. |
-
-Open, zarządzanie aplikacją i uruchamianie potoku są osobnymi prawami. Odczyt wyniku
-może dać 403 mimo poprawnego uruchomienia. Nie wymaga to dodania logowania w aplikacji.
-
-### Minimalny potok demonstracyjny
-
-Jeśli nie masz jeszcze potoku testowego, w osobnym repo typu **Python** dodaj plik
-`methods/template-echo.py` (kod skryptów i kod Web pozostają w osobnych repozytoriach):
-
-```python
-import json
-import zapqio
-
-def run(data: str) -> str:
-    payload = json.loads(data)
-    zapqio.log.info("Web template pipeline completed")
-    return json.dumps({"source": payload["source"], "ok": True})
+```text
+Formularz → run.php → API Zapq → potok → api/webhook.php → SQLite → strona wyniku
 ```
 
-Pobierz commit tego repo i wdróż go na runnerze wewnętrznym. W Zapq utwórz potok
-z jednym krokiem `template-echo` na tym runnerze, następnie metodę API np.
-`web-template-demo` przypisaną do ID tego potoku. Wpisz tę nazwę w formularzu aplikacji.
-Oczekuj stanu `Ok`, wyniku `{"source":"web-app","ok":true}` i linii logu podanej powyżej.
+Odbiór działa bez otwartej przeglądarki. Przycisk **Odczytaj odebrany webhook** czyta lokalny
+zapis; aplikacja nie odpytuje cyklicznie API Zapq. Nie wymaga własnego socketu, procesu
+w tle, Composera ani budowania frontendu.
+
+## Uruchomienie
+
+1. Utwórz własne repo z [web_app_template](https://github.com/zapqio/web_app_template)
+   przez **Use this template**. Katalog `public/` musi pozostać w korzeniu repo.
+2. Dodaj repo w Zapq jako typ **Web**, utwórz aplikację i wdróż commit.
+   Dostęp do strony wymaga `Applications.Open`, a uruchomienie potoku `Pipelines.Run`.
+3. Przygotuj potok na dostępnym runnerze i przypisz mu metodę API. W formularzu podaj
+   jej nazwę oraz JSON zgodny z wejściem potoku. Domyślne wartości ustawisz w `lib/config.php`.
+4. W konfiguracji tego potoku dodaj webhook na adres:
+
+   ```text
+   https://<instancja>/<firma>/ui/<nazwa-aplikacji>/api/webhook.php
+   ```
+
+   Dla lokalnego Compose można użyć skonfigurowanego originu wewnętrznego, np.
+   `http://app:8080/hdwr-demo/ui/<nazwa-aplikacji>/api/webhook.php`.
+5. Przenieś ID webhooka i jego sekret z Zapq do pliku `webhook.json` w prywatnym
+   katalogu wskazanym przez `ZAPQIO_APPLICATION_DATA_DIRECTORY`:
+
+   ```json
+   {"webhookId":"<ID webhooka>","secrets":["<sekret podpisu>"]}
+   ```
+
+   Plik ma należeć do UID aplikacji i mieć uprawnienia `0600`. Nie dodawaj go do Git
+   ani `public/`. Host przechowuje dane w `/apps-data/<ApplicationId>` na trwałym wolumenie.
+   Przy rotacji wpisz oba aktywne sekrety, a po okresie przejściowym usuń stary.
+6. Otwórz aplikację, kliknij **Uruchom**, poczekaj na wykonanie potoku i wybierz
+   **Odczytaj odebrany webhook**. Zapisz adres z `runId`, aby wrócić do wyniku później.
+
+Instancja Zapq musi obsługiwać ścieżki `/ui/<aplikacja>/api/` bez sesji użytkownika
+i przekazywać nagłówki `X-Webhook-*`. Pozostałe strony nadal wymagają sesji i uprawnień.
+PHP wywołuje API przez zaufany nagłówek `X-Zapq-Internal-Api-Url`; host tego adresu musi
+być dopuszczony w `AllowedHosts` instancji.
+
+## Co zawiera webhook
+
+Zdarzenie `pipelineRun.jobFinished` może przychodzić po kolejnych krokach. Pole
+`data.status` opisuje **cały potok**; zakończenie pierwszego kroku nie oznacza sukcesu
+całego uruchomienia. Odbiornik zapisuje `runId`, `status`, `lastOutput` oraz `steps`.
+Statusy: `waiting`, `executing`, `ok`, `error`, `needsAttention`, `cancelled`.
+`needsAttention` wymaga rozstrzygnięcia przez operatora i może później otrzymać nowy wynik.
+
+Weryfikacja obejmuje ID webhooka, HMAC-SHA256 z `timestamp + "." + surowe body` oraz
+świeżość podpisu (5 minut). Kluczem HMAC jest tekst sekretu, bez dekodowania hex.
+Ponowienie tej samej dostawy otrzymuje 200 bez ponownego zapisu. Spóźnione starsze zdarzenie
+nie zastępuje nowszego wyniku. Odpowiedź 200 jest wysyłana dopiero po trwałym zapisie;
+błąd zapisu zwraca 503, aby Zapq ponowił dostawę.
+
+Webhook dotrze także dla potoku uruchomionego bezpośrednio przez API. Strona wyniku pokazuje
+tylko uruchomienia rozpoczęte przez tę aplikację przez danego użytkownika — przy starcie
+zapisujemy powiązanie `runId` z jego ID. Samo poznanie `runId` nie daje dostępu do wyniku.
+Lokalny odczyt wymaga sesji i `Applications.Open`; nie wymaga `Logs.View`.
+
+`store_webhook()` w `lib/webhooks.php` to miejsce na własną obsługę biznesową. Tutaj jest
+nią zapis wyniku. Dodatkowe lokalne zmiany zapisuj w tej samej transakcji co potwierdzenie
+dostawy; dla wywołań zewnętrznych użyj idempotencji lub kolejki. Nie wywołuj w odbiorniku
+`zapq_context()` — webhook nie ma sesji ani tokenu użytkownika.
 
 ## Pliki
 
 | Plik | Rola |
 |---|---|
-| `public/index.php` | Formularz notatek, POST i przekierowanie względne; HTML z escapowaniem tekstu. |
-| `public/state.php` | GET/HEAD/POST JSON do próby danych, wersji SQLite i integralności bazy. |
-| `public/assets/style.css` | Statyczny arkusz stylów. |
-| `lib/database.php` | PDO, zapytania parametryzowane, utworzenie tabeli i obsługa zapisu. |
-| `lib/zapq.php` | Zaufany kontekst użytkownika i wywołanie API z PHP. |
-| `public/run.php` | POST uruchamiający metodę API w imieniu użytkownika. |
-| `public/status.php` | GET wyniku uruchomienia lub logów kroku, z prawami użytkownika. |
-| `lib/config.php`, `lib/version.php` | Jawna nazwa metody API i oznaczenie wersji przykładu. |
-| `tests/`, `.github/workflows/check.yml`, `.gitlab-ci.yml` | Lint, kontrakty klienta i integralność SQLite; bez artefaktu wdrożeniowego. |
-| `docs/agent.md` | Dane wejściowe i scenariusz odbioru dla agenta w SR7. |
-| `public/static.html`, `public/assets/zapq.js` | Przykład statyczny, pobieranie kontekstu, CSRF i klient API. |
+| `public/index.php`, `public/assets/` | Jedyna strona aplikacji: uruchomienie i odczyt wyniku. |
+| `public/run.php` | POST uruchamiający potok przez PHP, z CSRF i kluczem idempotencji. |
+| `public/status.php` | GET wyniku z lokalnej bazy, tylko dla autora uruchomienia. |
+| `public/api/webhook.php` | Odbiornik podpisanego webhooka, bez sesji użytkownika. |
+| `lib/zapq.php` | Wywołanie API Zapq z tożsamością użytkownika przekazaną przez bramkę. |
+| `lib/webhooks.php`, `lib/database.php` | Podpisy, deduplikacja, właściciel uruchomienia i SQLite. |
+| `lib/config.php` | Jawne wartości domyślne formularza, bez sekretów. |
 
-Host ustawia `ZAPQIO_APPLICATION_DATA_DIRECTORY=/apps-data/<ApplicationId>`.
-Tam powstają `state.sqlite` i `entries.txt`. Baza pozostaje poza repozytorium i poza `public/`;
-jej trwałość zapewnia wolumen. Kod korzysta z `__DIR__`, a linki i przekierowanie są względne,
-co obsługuje adres `https://app.zapq.io/{firma}/ui/{nazwa}/` oraz pusty `PathBase`.
+Baza `state.sqlite` i sekret pozostają poza kodem oraz `public/`. Wdrożenie nowego commita
+zachowuje dane; rollback cofa kod, nie dane ani schemat. Formularz zachowuje klucz idempotencji
+po utracie odpowiedzi: kliknij ponownie bez zmiany danych, aby odzyskać to samo uruchomienie.
+Bez JavaScript formularz również uruchamia potok, zwracając JSON z `runId`; zapisany wynik
+można odczytać pod `status.php?runId=<runId>` w sesji autora.
 
-SQLite używa domyślnego rollback journal, `busy_timeout=5000` i `synchronous=FULL`.
-Schemat zakłada autor aplikacji; zmiany schematu i zgodność starszego kodu po rollbacku
-również należą do autora. Nie narzucamy biblioteki migracji. Zapis do bazy i do pliku
-to dwie osobne operacje demonstracyjne, bez wspólnej transakcji. Błąd jednej z nich zwraca
-błąd żądania; nie oznacza automatycznego cofnięcia wcześniej zapisanego rekordu.
-Zapis pliku sprawdza również liczbę zapisanych bajtów, aby częściowy zapis przy braku miejsca
-nie wyglądał na sukces. Ostrzeżenie zajętości instancji nie blokuje zapisów; rzeczywisty
-brak miejsca nadal jest błędem. Próbę ENOSPC zawiera test hosta `run.py --faults`.
+## Testy
 
-## Wdrożenie przez API
-
-Pełne kontrakty swojej instancji znajdziesz pod `<PathBase>/api` oraz
-`<PathBase>/api/openapi-v1.json`. Każde poniższe żądanie poprzedź adresem instancji
-z `PathBase`, np. `https://app.zapq.io/firma`. Uwierzytelnij API własnym JWT lub kluczem
-API przekazanym poza repo i logami. Nie używaj klucza API jako sesji wejścia do PHP.
-
-| Kolejność | Żądanie i treść JSON |
-|---|---|
-| 1 | `POST /api/repositories` — `{"name":"moj-web","url":"https://github.com/moja-organizacja/moj-web","branch":"main","kind":"Web"}` → `id`. |
-| 2 | `POST /api/repositories/{id}/check` → sprawdź `lastError` oraz `remoteHeadCommit`. |
-| 3 | `POST /api/repositories/{id}/fetch` — `{"commit":"<pełny SHA>"}` → migawka i walidacja struktury. |
-| 4 | `POST /api/applications` — `{"name":"notatki","repositoryId":"<id repo>"}` → `id`, `revision`, `name`. |
-| 5 | `POST /api/applications/{id}/deployments` — `{"repositoryId":"<id repo>","commit":"<pełny SHA>"}`. |
-| 6 | `GET /api/applications/{id}/deployments` → bieżący commit w `current`, błąd hosta i historia. |
-
-Wdrożenie może odpowiedzieć HTTP 200 z `status: "Failed"` i `reason`; sprawdzaj treść.
-Commit musi być pełnym SHA (40 lub 64 znaki). Zmiana opisu/usunięcie wymaga aktualnej
-`revision`; konflikt 409 wymaga ponownego odczytu i uzgodnienia zmian.
-
-## Wersje A → B → A i trwałość
-
-1. Wersja początkowa ma `lib/version.php` zwracający `A`. Zapisz SHA A i dodaj notatkę.
-2. Skopiuj `tests/versions/B.php` do `lib/version.php`, utwórz i wypchnij nowy commit.
-   W PowerShell: `Copy-Item tests/versions/B.php lib/version.php`; w sh:
-   `cp tests/versions/B.php lib/version.php`. Wdróż SHA B. Ekran i `state.php` pokażą B.
-3. Sprawdź wcześniejszą notatkę i plik, dopisz drugą notatkę.
-4. W historii wdrożeń wybierz A lub wyślij jego SHA przez API. Oznaczenie wraca do A,
-   obie notatki i plik pozostają. Nie zmieniamy schematu między tymi wersjami.
-5. Wycofaj wdrożenie przez panel albo `POST .../deployments/withdraw` z
-   `{"expectedDeploymentId":"<current.id>"}`. Nowe wejścia dają 404. Ponowne wdrożenie
-   zachowuje dane. Usunięcie aplikacji także zachowuje dane starego ID; nowa aplikacja
-   pod starą nazwą ma nowe ID i pusty katalog danych.
-
-Dane przetrwają restart tylko z tym samym wolumenem. Rollback cofa kod, nie dane ani
-schemat. Kopie zapasowe/import SQLite i twarde quota nie są częścią tego szablonu.
-
-## Testy i CI
-
-Wymagania lokalne: PHP 8.4 z PDO SQLite, mbstring i cURL oraz Node 24 do testu JS.
-Z katalogu głównego własnego repo:
+PHP 8.4 z `pdo_sqlite` i `curl`; Node 24 jest potrzebny wyłącznie do testów strony.
 
 ```sh
 php tests/check.php
-node --experimental-vm-modules --test tests/zapq.test.mjs
+node --test tests/app.test.mjs
 ```
 
-Bez lokalnego PHP możesz użyć tego samego obrazu co CI (PowerShell):
+Testy PHP obejmują podpis, rotację, duplikaty, kolejność zdarzeń, trwałość i uprawnienia do
+wyniku. Test HTTP uruchamia dwa tymczasowe serwery PHP na loopback: aplikację i atrapę API
+Zapq. Sprawdza rzeczywiste żądania, formularz multipart, surowy JSON i zapis wyniku.
+Nie wymaga działającej instancji ani połączeń zewnętrznych. Testy zapisują dane tylko w TEMP.
+Testy JS sprawdzają formularz, CSRF, ponowienie po utracie odpowiedzi i ręczny odczyt wyniku.
+
+Bez lokalnego PHP (PowerShell):
 
 ```powershell
 docker run --rm --network none --read-only --tmpfs /tmp -v "${PWD}:/template:ro" -w /template php:8.4.26-fpm-alpine3.24@sha256:78cd8de9970a9cd6ff4d98860a94eb5bf37dd2d5776b4785562dbfad01c29d5a php tests/check.php
 ```
 
-Testy zapisują dane wyłącznie w katalogu tymczasowym. Sprawdzają składnię wszystkich
-plików PHP, strukturę samodzielnego repo, odrzucanie nieprawidłowych danych, SQLite po
-ponownym otwarciu, klienta API, CSRF i odnowienie kontekstu dla obu wariantów PathBase.
-GitHub Actions ([checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1))
-i GitLab CI wykonują te same testy. Nie powstaje ZIP ani obraz wymagany do wdrożenia:
-platforma pobiera migawkę commita. Wynik CI nie jest automatycznym wdrożeniem.
-
-Repo `web_app_template` udostępnia **Use this template**, tak jak szablony
-[.NET](https://github.com/zapqio/dotnet_runner_template),
-[Node.js](https://github.com/zapqio/internal_runner_node_template) i
-[Python](https://github.com/zapqio/internal_runner_python_template).
-Odbiór własnej kopii wykonaj według szybkiego startu; scenariusz pracy agenta
-i potrzebne dane opisuje [docs/agent.md](docs/agent.md).
-
-Harness platformy wymaga także .NET 10, Pythona, Gita, Dockera Linux, Chrome i modułu
-Node `playwright`. Jeśli moduł jest zainstalowany poza standardową ścieżką Node, ustaw
-`ZAPQIO_TEST_PLAYWRIGHT_MODULE` na jego absolutny katalog. Artefakty pozostają w TEMP.
-
-Testy jednostkowe nie symulują logowania. Pełny odbiór wymaga działającej instancji Zapq
-z `ui-host`. W repo platformy uruchom:
-
-```powershell
-python -B Zapqio.Platform.Tests/Smoke/ui_host/api.py --template
-python -B Zapqio.Platform.Tests/Smoke/ui_host/api.py --template --root-path
-```
-
-Harness używa własnego Compose, prawdziwego PHP, API, executora i lokalnej kopii Git;
-nie publikuje repo ani nie zmienia działającej instancji. Pobranie z publicznego GitHub/GitLab
-i zdalny przebieg CI wymagają wydania repo szablonu i są osobnym krokiem wydania.
-
-## Kontrakt kontekstu PHP
-
-Bramka Web usuwa nagłówki kontekstu od klienta i ustawia własne. PHP czyta je z `$_SERVER`;
-funkcja `zapq_context()` w `lib/zapq.php` udostępnia gotową tablicę. Nazwy w tabeli są
-nazwami nagłówków HTTP, np. `X-Zapq-User-Id` odpowiada `HTTP_X_ZAPQ_USER_ID`.
-
-| Parametr | Znaczenie |
-|---|---|
-| `X-Zapq-Application-Id` | Stały GUID aplikacji. |
-| `X-Zapq-Application-Url` | Publiczna ścieżka aplikacji z końcowym `/`, zawiera `PathBase`. |
-| `X-Zapq-Api-Url` | Publiczna ścieżka `PathBase + /api/`. |
-| `X-Zapq-Internal-Api-Url` | Skonfigurowany origin Weba oraz `PathBase + /api/`; używa go cURL. |
-| `X-Zapq-User-Id`, `X-Zapq-User-Login` | ID użytkownika i login zakodowany percent-encoding; login odczytaj przez `rawurldecode`. |
-| `X-Zapq-Access-Token` | JWT użytkownika ważny 15 minut, wyłącznie dla API Zapq. |
-| `X-Zapq-Csrf-Token`, `X-Zapq-Csrf-Field`, `X-Zapq-Csrf-Header` | Token i nazwy pola/nagłówka ASP.NET Antiforgery. |
-| env `ZAPQIO_APPLICATION_DATA_DIRECTORY` | Trwały katalog danych poza kodem i `public/`. |
-
-Formularz umieszcza CSRF w ukrytym polu; fetch do aplikacji w nagłówku. Token wymaga
-powiązanego cookie przeglądarki. Kontrolę wykonuje Web przed uruchomieniem PHP.
-Nie przekazujemy do PHP cookie logowania, klucza API ani wejściowego `Authorization`.
-Nie zapisuj JWT w logach, URL, bazie ani HTML; `run.php` używa go tylko po stronie PHP.
-API zawsze ponownie rozstrzyga uprawnienia użytkownika. Autor aplikacji nie nadaje praw
-przez nagłówki ani nie przełącza wywołania na konto systemowe.
-
-## Statyczny HTML i JavaScript
-
-`GET <adres-aplikacji>_zapq/context` zwraca `applicationId`, `applicationUrl`, `apiUrl`,
-`user: { id, login }`, `token`, `expiresAt` oraz `csrf: { token, headerName, formFieldName }`.
-Wymaga sesji cookie i `Open`, ma `Cache-Control: no-store`, nie zwraca refresh tokenu.
-`assets/zapq.js` przechowuje wynik tylko w pamięci modułu i pobiera ponownie, gdy do końca
-ważności zostaje mniej niż minuta. `applicationFetch()` dodaje CSRF, a `apiFetch()` bearer.
-Nie zapisuj tokenu w localStorage/sessionStorage. Przy 401/403 wróć do logowania lub
-sprawdź uprawnienia; ponowne pobranie kontekstu również wymaga aktywnej sesji i `Open`.
-
-Wylogowanie i odebranie `Open` blokują dalsze wejścia do aplikacji oraz pobieranie kontekstu.
-Już wydany JWT zachowuje dotychczasowe zasady API do wygaśnięcia, w tym ponowną kontrolę
-uprawnień operacji. Nie jest to token z automatycznym unieważnianiem po zamknięciu strony.
-
-Publiczny katalog `public/` jest jedynym katalogiem serwowanym przez host. `lib/`, testy,
-README i dane nie są dostępne przez HTTP. Nie dodawaj sekretów ani baz do `public/`.
+GitHub Actions i GitLab CI wykonują te same testy. Nie budują obrazu aplikacji ani nie
+wdrażają jej automatycznie. Test z prawdziwym Zapq opisuje [docs/agent.md](docs/agent.md).

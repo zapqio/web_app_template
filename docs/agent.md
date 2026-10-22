@@ -1,32 +1,33 @@
-# Scenariusz przejęcia aplikacji przez agenta (SR7)
+# Praca z szablonem PHP
 
-Ten dokument jest częścią szablonu. Nie stanowi dowodu wykonanego odbioru SR7.
+Szablon ma pozostać mały: jedna strona do uruchomienia potoku i odczytu webhooka.
+Nie dodawaj przykładów notatek, plików, osobnego podglądu logów ani pollingu API.
 
-## Dane przekazywane agentowi przez programistę
+## Konfiguracja
 
-- URL nowego repozytorium Web, gałąź i dostęp do zapisu kodu.
-- Adres instancji Zapq z `PathBase`, ID repozytorium oraz ID/nazwa aplikacji, jeśli już istnieją.
-- Dostęp do API platformy przekazany poza repozytorium i logami.
-- Nazwa metody API przypisanej do testowego potoku, ID potoku i oczekiwany wynik.
-- Konto przeglądarkowe z Open oraz prawa API do zarządzania/wdrożeń, Run i Logs.View.
+- Repozytorium Web, gałąź, ID aplikacji i URL instancji z `PathBase`.
+- Nazwa metody API, testowy potok, dostępny runner i poprawne wejście JSON.
+- Webhook potoku wskazujący `/ui/<aplikacja>/api/webhook.php`.
+- ID webhooka i sekret w prywatnym `webhook.json` w katalogu danych aplikacji.
+- Konto z `Applications.Open` i `Pipelines.Run`. Do wdrożenia odpowiednie prawa
+  repozytorium, aplikacji oraz `Deployments.Send`.
 
-## Odbiór
+Sekretów ani danych logowania nie zapisuj w repo, URL, logach, raportach ani HTML.
+Komunikaty commitów pisz po angielsku. Każdy `if` i `else` ma mieć klamry.
 
-1. Przeczytaj README. Uruchom `php tests/check.php` i testy JS.
-2. Ustaw `lib/config.php`, przygotuj commit A i zapisz jego pełny SHA.
-3. Przez API pobierz commit, utwórz aplikację, jeśli jej brak, i wdróż A. Sprawdź
-   `status: Applied`, bieżący commit i niezmienny URL, uwzględniający PathBase.
-4. Otwórz aplikację przez sesję Zapq. Zapisz unikalną notatkę, sprawdź SQLite i plik
-   przez `state.php`. Uruchom potok i odczytaj wynik oraz logi przez `status.php`.
-   Autor uruchomienia musi odpowiadać użytkownikowi aplikacji.
-5. Skopiuj `tests/versions/B.php` do `lib/version.php`, utwórz commit B, uruchom CI,
-   wypchnij kod i wdróż pełny SHA B przez API. Sprawdź wersję B i dotychczasowe dane.
-6. Dodaj drugą notatkę, wdróż ponownie SHA A. Obie notatki oraz plik muszą pozostać.
-7. Sprawdź odmowę Run oraz odczytu logów dla kont bez odpowiednich praw. Open samo
-   w sobie nie nadaje tych uprawnień. Nie obchodź odmowy przez konto administratora.
-8. Wycofaj wdrożenie z aktualnym `expectedDeploymentId`, sprawdź 404, przywróć A
-   i sprawdź dane. Raport zawiera SHA, ID aplikacji/uruchomień i wyniki, bez tokenów.
+## Weryfikacja
 
-Pełny SR7 dokłada zmianę i wdrożenie skryptu na runnerze. Ten szablon wywołuje istniejący
-potok; nie instaluje runnera, nie tworzy automatycznie kont i nie zatwierdza wydania
-zewnętrznego runnera. Zgoda na publikację repozytorium/wydanie wynika z bieżącego zadania.
+1. Uruchom `php tests/check.php` oraz `node --test tests/app.test.mjs`.
+2. Wdróż uzgodniony commit i sprawdź `Applied` oraz SHA bieżącego wdrożenia.
+3. Otwórz stronę w sesji Zapq i uruchom potok. Sprawdź autora uruchomienia.
+4. Odczytaj webhook. Porównaj `runId`, status całego potoku, kroki i `lastOutput`.
+   Przy potoku z kilkoma krokami pierwszy webhook nie może udawać końcowego sukcesu.
+5. Zamknij stronę po starcie, a po zakończeniu wróć pod adres z `runId`.
+   Odbiór ma działać bez przeglądarki i bez odpytywania API w tle.
+6. Sprawdź powtórzoną dostawę (200, bez drugiego zapisu), zmienione body i błędny podpis
+   (403), a także brak dostępu innego użytkownika do wyniku (404).
+7. Po kolejnym wdrożeniu wcześniejszy wynik powinien pozostać w SQLite.
+
+Test HTTP w tym repo izoluje PHP i używa atrapy API. Nie zastępuje testu bramki,
+CSRF ani prawdziwej kolejki webhooków w Zapq. Raport rozróżnia te dwa rodzaje testów.
+Publikacja i wdrożenie wynikają z bieżącego polecenia użytkownika.

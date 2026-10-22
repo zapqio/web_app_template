@@ -10,4 +10,4 @@ javascript:
   stage: test
   image: node:24-alpine
   script:
-    - node --experimental-vm-modules --test tests/zapq.test.mjs
+    - node --test tests/app.test.mjs

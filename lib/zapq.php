@@ -9,67 +9,42 @@ function zapq_context(): array
     }
 
     return [
-        'application_id' => $_SERVER['HTTP_X_ZAPQ_APPLICATION_ID'],
-        'application_url' => $_SERVER['HTTP_X_ZAPQ_APPLICATION_URL'],
-        'api_url' => $_SERVER['HTTP_X_ZAPQ_API_URL'],
-        'internal_api_url' => $_SERVER['HTTP_X_ZAPQ_INTERNAL_API_URL'],
         'user_id' => $_SERVER['HTTP_X_ZAPQ_USER_ID'],
-        'login' => rawurldecode($_SERVER['HTTP_X_ZAPQ_USER_LOGIN']),
-        'token' => $token,
-        'csrf_token' => $_SERVER['HTTP_X_ZAPQ_CSRF_TOKEN'],
-        'csrf_field' => $_SERVER['HTTP_X_ZAPQ_CSRF_FIELD'],
-        'csrf_header' => $_SERVER['HTTP_X_ZAPQ_CSRF_HEADER'],
-        'data_directory' => getenv('ZAPQIO_APPLICATION_DATA_DIRECTORY')
+        'internal_api_url' => $_SERVER['HTTP_X_ZAPQ_INTERNAL_API_URL'],
+        'token' => $token
     ];
 }
 
-function zapq_run_pipeline(string $method, mixed $input): array
+function zapq_run_pipeline(string $method, string $inputJson, string $idempotencyKey): array
 {
     if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $method)) {
         throw new InvalidArgumentException('Invalid API method name.');
     }
 
-    return zapq_api('POST', 'exec-pipeline/' . rawurlencode($method), $input);
-}
-
-function zapq_run_status(string $runId, ?string $stepRunId = null): array
-{
-    foreach (array_filter([$runId, $stepRunId], fn($id) => $id !== null) as $id) {
-        if (!preg_match('/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iD', $id)) {
-            throw new InvalidArgumentException('Invalid run or step ID.');
-        }
+    if (strlen($inputJson) > 65536 || !json_validate($inputJson)) {
+        throw new InvalidArgumentException('Pipeline input must be valid JSON up to 64 KiB.');
     }
 
-    $path = 'runs/' . $runId;
-    if ($stepRunId !== null) {
-        $path .= '/steps/' . $stepRunId . '/logs';
-    }
-
-    return zapq_api('GET', $path);
-}
-
-function zapq_api(string $method, string $path, mixed $input = null): array
-{
-    // Internal routes only; never accept a complete URL from a form or follow redirects with a JWT.
-    if (!preg_match('~^(?:exec-pipeline/[a-zA-Z0-9_-]{1,128}|runs/[0-9a-f-]{36}(?:/steps/[0-9a-f-]{36}/logs)?)$~iD', $path) ||
-        !in_array($method, ['GET', 'POST'], true)) {
-        throw new InvalidArgumentException('Invalid API request.');
+    if (!preg_match('/^[a-zA-Z0-9_-]{1,100}$/D', $idempotencyKey)) {
+        throw new InvalidArgumentException('Invalid idempotency key.');
     }
 
     $context = zapq_context();
-    $request = curl_init($context['internal_api_url'] . $path);
+    $request = curl_init($context['internal_api_url'] . 'exec-pipeline/' . rawurlencode($method));
     curl_setopt_array($request, [
-        CURLOPT_CUSTOMREQUEST => $method,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $context['token']],
+        CURLOPT_POST => true,
+        // Preserve the original JSON, including large numbers and the distinction between {} and [].
+        CURLOPT_POSTFIELDS => $inputJson,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $context['token'],
+            'Idempotency-Key: ' . $idempotencyKey
+        ],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_TIMEOUT => 15
     ]);
-    if ($method === 'POST') {
-        curl_setopt($request, CURLOPT_POSTFIELDS, json_encode($input, JSON_THROW_ON_ERROR));
-    }
-
     try {
         $body = curl_exec($request);
         if ($body === false) {

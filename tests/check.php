@@ -1,20 +1,22 @@
 <?php
 declare(strict_types=1);
 
-// No Composer or test framework required. All writable test data stays in the OS temp directory.
-$root = dirname(__DIR__);
-foreach (['pdo_sqlite', 'mbstring', 'curl'] as $extension) {
-    if (!extension_loaded($extension)) {
-        throw new RuntimeException('Missing PHP extension: ' . $extension);
+function check(bool $condition, string $message): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
     }
 }
 
-foreach (['public/index.php', 'public/run.php', 'public/status.php', 'public/state.php',
-    'lib/database.php', 'lib/zapq.php', 'lib/config.php', 'lib/version.php',
+$root = dirname(__DIR__);
+foreach (['pdo_sqlite', 'curl'] as $extension) {
+    check(extension_loaded($extension), 'Missing PHP extension: ' . $extension);
+}
+
+foreach (['public/index.php', 'public/run.php', 'public/status.php', 'public/api/webhook.php',
+    'lib/database.php', 'lib/zapq.php', 'lib/webhooks.php', 'lib/config.php',
     'README.md', 'docs/agent.md', '.github/workflows/check.yml', '.gitlab-ci.yml'] as $path) {
-    if (!is_file($root . '/' . $path)) {
-        throw new RuntimeException('Missing template file: ' . $path);
-    }
+    check(is_file($root . '/' . $path), 'Missing template file: ' . $path);
 }
 
 $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
@@ -25,21 +27,17 @@ foreach ($files as $file) {
         continue;
     }
 
-    if (preg_match('/\.(sqlite(?:-.*)?|db)$/i', $relative) ||
-        preg_match('~^public/(?:lib|tests|docs|data)/~', $relative)) {
-        throw new RuntimeException('Private data/code in template: ' . $relative);
-    }
-
+    check(!preg_match('/\.(sqlite(?:-.*)?|db)$/i', $relative) &&
+        !preg_match('~^public/(?:lib|tests|docs|data)/~', $relative) && $file->getFilename() !== 'webhook.json',
+        'Private data in template: ' . $relative);
     if ($file->getExtension() === 'php') {
         passthru(escapeshellarg(PHP_BINARY) . ' -l ' . escapeshellarg($file->getPathname()), $status);
-        if ($status !== 0) {
-            exit($status);
-        }
-
+        check($status === 0, 'PHP lint: ' . $relative);
         $linted++;
     }
 }
 
-require __DIR__ . '/database.php';
 require __DIR__ . '/contracts.php';
-echo "Template OK: $linted PHP files linted; database and API contract checks passed.\n";
+require __DIR__ . '/webhooks.php';
+require __DIR__ . '/http.php';
+echo "Template OK: $linted PHP files linted; API, webhook, persistence and HTTP checks passed.\n";
