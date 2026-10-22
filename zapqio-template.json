@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "name": "Web application",
+  "description": "PHP web application with JavaScript, tests and CI.",
+  "kind": "Web",
+  "branch": "main"
+}
