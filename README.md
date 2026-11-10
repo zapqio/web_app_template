@@ -1,27 +1,27 @@
-# Szablon aplikacji PHP dla Zapq
+# PHP application template for Zapq
 
-Jedna strona do uruchomienia potoku i odczytu jego wyniku. PHP korzysta z sesji
-Zapq, odbiera podpisany webhook i zapisuje wynik w SQLite, także po zamknięciu przeglądarki.
+A single page to run a pipeline and read its result. PHP uses the Zapq session,
+receives a signed webhook, and stores the result in SQLite, even after the browser is closed.
 
-## Zacznij
+## Get started
 
-1. Wybierz **Use this template → Create a new repository** i sklonuj własne repozytorium.
-2. Zachowaj katalog `public/` w katalogu głównym repozytorium.
-3. Przejdź przez [publikowanie aplikacji](https://docs.zapq.io/pl/guides/applications).
-4. Przed uruchomieniem przykładu [skonfiguruj potok i webhook](https://docs.zapq.io/pl/technical/php-applications#application-pipeline). Plik z sekretem w prywatnym katalogu danych przygotowuje operator instancji.
+1. Select **Use this template → Create a new repository** and clone your repository.
+2. Keep the `public/` directory at the repository root.
+3. Follow the [application publishing guide](https://docs.zapq.io/guides/applications).
+4. Before running the example, [configure the pipeline and webhook](https://docs.zapq.io/technical/php-applications#application-pipeline). The instance operator prepares the secret file in the application's private data directory.
 
-## Testy lokalne
+## Local tests
 
-Wymagania: PHP 8.4 z `pdo_sqlite` i `curl` oraz Node.js 24. Uruchom z katalogu repozytorium:
+Requirements: PHP 8.4 with `pdo_sqlite` and `curl`, and Node.js 24. Run from the repository root:
 
 ```sh
 php tests/check.php
 node --test tests/app.test.mjs
 ```
 
-Szablon nie wymaga Composera ani budowania frontendu. Testy nie publikują aplikacji.
+The template does not require Composer or a frontend build. Tests do not publish the application.
 
-## Dokumentacja
+## Documentation
 
-- [Opublikuj aplikację webową](https://docs.zapq.io/pl/guides/applications): repozytorium, publikacja i aktualizacje w panelu.
-- [Tworzenie aplikacji PHP](https://docs.zapq.io/pl/technical/php-applications): kod, sesja, webhooki, dane i testowanie.
+- [Publish a web application](https://docs.zapq.io/guides/applications): repository setup, publishing, and updates in the panel.
+- [Developing PHP applications](https://docs.zapq.io/technical/php-applications): code, sessions, webhooks, data, and testing.
